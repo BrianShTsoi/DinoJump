@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from collections import deque
 
-SERIAL_PORT = 'COM10'  
+SERIAL_PORT = 'COM8'  
 BAUD_RATE = 9600
 DATA_POINTS = 200
 Y_LOWER_LIM = 0
@@ -16,6 +16,8 @@ Y_UPPER_LIM = 4096
 data_buffer_0 = deque(maxlen=DATA_POINTS)
 data_buffer_1 = deque(maxlen=DATA_POINTS)
 data_buffer_2 = deque(maxlen=DATA_POINTS)
+
+ser_buf = ""
 
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0)
 print(f"Connected to {SERIAL_PORT} at {BAUD_RATE} baud.")
@@ -48,22 +50,27 @@ def init():
     return line0, line1, line2, text0, text1, text2
 
 def update(frame):
-    global data_buffer_1, data_buffer_2
+    global data_buffer_0, data_buffer_1, data_buffer_2, ser_buf
     
     try:
         while ser.in_waiting > 0:
-            line_data = ser.readline().decode('utf-8').strip()
-            print(line_data, end=" ")
-            if line_data:
-                if "L" in line_data or "H" in line_data:
-                    if line_data[1] == "0":
-                        text0.set_text(line_data)
-                    elif line_data[1] == "1":
-                        text1.set_text(line_data)
+            ser_buf += ser.readline().decode('utf-8')
+            # ser_buf += input()
+            # print(ser_buf, end=" ")
+            # print(ser_buf)
+            if ser_buf.endswith("\n"):
+                ser_buf = ser_buf.strip()
+
+                if "L" in ser_buf or "H" in ser_buf:
+                    if ser_buf[1] == "0":
+                        text0.set_text(ser_buf)
+                    elif ser_buf[1] == "1":
+                        text1.set_text(ser_buf)
                     else:
-                        text2.set_text(line_data)
-                else:
-                    channel, data = line_data.split(":")
+                        text2.set_text(ser_buf)
+
+                elif ":" in ser_buf:
+                    channel, data = ser_buf.split(":")
                     value = float(data)
                     if int(channel) == 0:
                         data_buffer_0.append(value)
@@ -73,7 +80,15 @@ def update(frame):
                         data_buffer_2.append(value)
                     else:
                         print("Unknown channel")
-        print()
+
+                # elif "J" in ser_buf:
+                #     print("J", flush=True)
+                # elif "D" in ser_buf:
+                #     print("D", flush=True)
+
+                ser_buf = ""
+                
+        print("", flush=True)
 
     except serial.SerialException as e:
         print(f"Serial error: {e}")

@@ -12,9 +12,9 @@ void setup() {
 
 void loop() {
   // print_val();
-  // print_min_of_samples();
-  detect_ducking();
-  detect_jumping();
+  print_min_of_samples();
+  // detect_ducking();
+  // detect_jumping();
   delay(5);
 }
 
