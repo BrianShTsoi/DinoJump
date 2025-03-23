@@ -9,19 +9,16 @@ HologramFan::HologramFan()
 	managers[1].add(&board4);
 	managers[1].add(&board5);
 	managers[1].add(&board6);
+}
 
+void HologramFan::begin() {
 	managers[0].begin();
 	managers[1].begin();
 }
 
-void HologramFan::flash_frame(BitArray2D<MAX_X> frame) {
+void HologramFan::flash_frame(const BitArray2D<MAX_X>& frame, int manager_num) {
 	for (int col = 0; col < MAX_X; col++) {
-		if (blade_flop) {
-			managers[0].setPatternAutoIncrement(frame.get_col(col), 255);
-		} else {
-			managers[1].setPatternAutoIncrement(frame.get_col(col), 255);
-		}
-		blade_flop = !blade_flop;
+		managers[manager_num].setPatternAutoIncrement(frame.get_col(col), 255);
 	}
 	managers[0].setPatternAutoIncrement(0, 255);
 	managers[1].setPatternAutoIncrement(0, 255);

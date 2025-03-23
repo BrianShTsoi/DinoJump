@@ -8,52 +8,54 @@
 
 #define RESET_PIN D7
 #define IR_PIN D8
+#define BEAM_BREAK_PIN D9
+#define JUMP_PIN D10
 
 void TaskDisplay(void *pvParameters);
 void TaskGame(void *pvParameters);
 
+Game game;
+HologramFan display;
+bool jumped = false;
+
 void setup() {
 	Wire.begin();
 	Wire.setClock(1000000);
+
+	pinMode(BEAM_BREAK_PIN, INPUT_PULLUP);
+	pinMode(JUMP_PIN, INPUT_PULLUP);
 
 	pinMode(RESET_PIN, OUTPUT);
 	digitalWrite(RESET_PIN, LOW);
 	delay(5);
 	digitalWrite(RESET_PIN, HIGH);
 
-	Game *game = new Game();
+	display.begin();
 
-	xTaskCreatePinnedToCore(TaskDisplay, "Display Task", 8192, game, 1, NULL, CORE_1);
-	xTaskCreatePinnedToCore(TaskGame, "Game Task", 8192, game, 2, NULL, CORE_0);
+	Serial.begin(9600);
+
+	attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, FALLING);
 }
 
-void loop() {}
+void loop() {
+	if (digitalRead(IR_PIN) == LOW) {
+		// Normally flashing a frame takes ~0.1s
+		display.flash_frame(game.get_frame(), digitalRead(BEAM_BREAK_PIN) == HIGH ? 1 : 0);
 
-void TaskDisplay(void *pvParameters) {
-	Game *game = static_cast<Game *>(pvParameters);
-	HologramFan display = HologramFan();
-
-	while (true) {
-		if (digitalRead(IR_PIN) == LOW) {
-			display.flash_frame(game->get_frame());
+		// Updating game states take ~0.4ms
+		if (jumped) {
+			game.input(Input_State::JUMP);
+			jumped = false;
+		} else {
+			game.input(Input_State::NEUTRAL);
 		}
+		game.update_obstacles();
+		game.update_frame();
 
-		// Need to determine if this delay causes use to miss flashing frames
-		vTaskDelay(pdMS_TO_TICKS(100));
 	}
-
-	vTaskDelete(NULL);
+	delay(1);
 }
 
-void TaskGame(void *pvParameters) {
-	Game *game = static_cast<Game *>(pvParameters);
-
-	while (true) {
-		game->update_obstacles();
-		game->update_frame();
-
-		vTaskDelay(pdMS_TO_TICKS(100));
-	}
-
-	vTaskDelete(NULL);
+void handleJump() {
+	jumped = true;
 }

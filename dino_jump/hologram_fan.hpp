@@ -14,7 +14,8 @@ inline constexpr int MAX_BRIGHTNESS = 255;
 class HologramFan {
   public:
 	HologramFan();
-	void flash_frame(BitArray2D<MAX_X> frame);
+	void begin();
+	void flash_frame(const BitArray2D<MAX_X>& frame, int manager_num);
 
   private:
 	TLC59116 board1;
@@ -24,7 +25,6 @@ class HologramFan {
 	TLC59116 board5;
 	TLC59116 board6;
 	TLC59116Manager managers[2];
-	bool blade_flop;
 };
 
 #endif // HOLOGRAM_FAN_HPP
