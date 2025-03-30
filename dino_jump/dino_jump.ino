@@ -3,6 +3,7 @@
 #include "hologram_fan.hpp"
 #include "title_frame.hpp"
 
+#define FAN_PIN D6
 #define RESET_PIN D7
 #define IR_PIN D8
 #define BEAM_BREAK_PIN D9
@@ -16,7 +17,7 @@ bool jumped = false;
 
 void setup() {
   Wire.begin();
-  Wire.setClock(1000000);
+  Wire.setClock(800000);
 
   pinMode(IR_PIN, INPUT);
   pinMode(BEAM_BREAK_PIN, INPUT_PULLUP);
@@ -24,14 +25,14 @@ void setup() {
   pinMode(JUMP_PIN, INPUT);
   pinMode(DUCK_PIN, INPUT);
 
+  pinMode(FAN_PIN, OUTPUT);
+
   pinMode(RESET_PIN, OUTPUT);
   digitalWrite(RESET_PIN, LOW);
   delay(5);
   digitalWrite(RESET_PIN, HIGH);
 
   display.begin();
-
-  Serial.begin(9600);
 
   attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, RISING);
 }
@@ -43,6 +44,13 @@ void loop() {
 }
 
 void title_loop() {
+  while(digitalRead(START_PIN) == HIGH) {
+    delay(1);
+  }
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(FAN_PIN, HIGH);
+  delay(1000);
+  
   while (digitalRead(START_PIN) == HIGH) {
     if (digitalRead(IR_PIN) == LOW) {
       display.flash_frame(TITLE_FRAME, digitalRead(BEAM_BREAK_PIN) == HIGH ? 1 : 0);
