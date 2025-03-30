@@ -18,6 +18,7 @@ class HologramFan {
 	void flash_frame(const BitArray2D<MAX_X>& frame, int manager_num);
 
   private:
+  void board_sanity_flash();
 	TLC59116 board1;
 	TLC59116 board2;
 	TLC59116 board3;

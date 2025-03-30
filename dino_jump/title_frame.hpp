@@ -7,13 +7,13 @@
 #include <cstring>
 
 #include "bit_array_2d.hpp"
+#include "constants.hpp"
 
 constexpr int TITLE_HEIGHT = 48;
-constexpr int TITLE_WIDTH = 100;
 
-using TitleFrame = BitArray2D<TITLE_WIDTH>;
+using TitleFrame = BitArray2D<MAX_X>;
 
-extern const std::array<std::array<uint8_t, TITLE_WIDTH>, TITLE_HEIGHT> TITLE_SPRITE;
+extern const std::array<std::array<uint8_t, MAX_X>, TITLE_HEIGHT> TITLE_SPRITE;
 extern const TitleFrame TITLE_FRAME; 
 
 #endif // TITLE_FRAME_HPP

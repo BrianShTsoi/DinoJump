@@ -28,6 +28,8 @@ void setup() {
   pinMode(IR_PIN, INPUT);
   pinMode(BEAM_BREAK_PIN, INPUT_PULLUP);
   pinMode(START_PIN, INPUT_PULLUP);
+  pinMode(JUMP_PIN, INPUT);
+  pinMode(DUCK_PIN, INPUT);
 
   pinMode(RESET_PIN, OUTPUT);
   digitalWrite(RESET_PIN, LOW);
@@ -41,7 +43,7 @@ void setup() {
 
   Serial.begin(9600);
 
-  attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, FALLING);
+  attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, RISING);
 }
 
 void loop() {

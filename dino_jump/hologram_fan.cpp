@@ -11,9 +11,32 @@ HologramFan::HologramFan()
 	managers[1].add(&board6);
 }
 
+void HologramFan::board_sanity_flash() {
+  board1.setPatternAutoIncrement(0xFFFF, 255);
+  board1.setPatternAutoIncrement(0xFFFF, 0);
+  delay(1);
+  board2.setPatternAutoIncrement(0xFFFF, 255);
+  board2.setPatternAutoIncrement(0xFFFF, 0);
+  delay(1);
+  board3.setPatternAutoIncrement(0xFFFF, 255);
+  board3.setPatternAutoIncrement(0xFFFF, 0);
+  delay(1);
+  board4.setPatternAutoIncrement(0xFFFF, 255);
+  board4.setPatternAutoIncrement(0xFFFF, 0);
+  delay(1);
+  board5.setPatternAutoIncrement(0xFFFF, 255);
+  board5.setPatternAutoIncrement(0xFFFF, 0);
+  delay(1);
+  board6.setPatternAutoIncrement(0xFFFF, 255);
+  board6.setPatternAutoIncrement(0xFFFF, 0);
+}
+
+
 void HologramFan::begin() {
 	managers[0].begin();
 	managers[1].begin();
+
+  board_sanity_flash();
 }
 
 void HologramFan::flash_frame(const BitArray2D<MAX_X>& frame, int manager_num) {
