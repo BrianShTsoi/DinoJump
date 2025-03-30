@@ -1,6 +1,3 @@
-#include <Adafruit_GFX.h>
-#include <Adafruit_LEDBackpack.h>
-
 #include "bit_array_2d.hpp"
 #include "game.hpp"
 #include "hologram_fan.hpp"
@@ -13,12 +10,8 @@
 #define DUCK_PIN D11
 #define START_PIN D12
 
-const uint16_t digitToSegment[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66,
-  0x6D, 0x7D, 0x07, 0x7F, 0x6F};
-
 Game game;
 HologramFan display;
-Adafruit_LEDBackpack score;
 bool jumped = false;
 
 void setup() {
@@ -38,9 +31,6 @@ void setup() {
 
   display.begin();
 
-  score.begin(0x70);  
-  display_number(score, 0);
-
   Serial.begin(9600);
 
   attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, RISING);
@@ -50,21 +40,6 @@ void loop() {
   title_loop();
   
   game_loop();
-}
-
-// Function to display a number on the hex display
-void display_number(Adafruit_LEDBackpack &matrix, int number) {
-  // Serial.println(number);
-  matrix.clear();
-  if (number < 0 || number > 9999)
-      return; // Ensure number is within range
-  int counts[4] = {0, 1, 3, 4};
-  for (int i = 3; i >= 0; i--) {
-      int digit = number % 10;
-      matrix.displaybuffer[counts[i]] = digitToSegment[digit];
-      number /= 10;
-  }
-  matrix.writeDisplay();
 }
 
 void title_loop() {
@@ -93,7 +68,6 @@ void game_loop() {
       }
       game.update_obstacles();
       game.update_frame();
-      display_number(score, game.get_score());
     }
     delay(1);
   }
