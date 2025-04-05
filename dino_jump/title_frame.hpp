@@ -15,5 +15,6 @@ using TitleFrame = BitArray2D<MAX_X>;
 
 extern const std::array<std::array<uint8_t, MAX_X>, TITLE_HEIGHT> TITLE_SPRITE;
 extern const TitleFrame TITLE_FRAME; 
+extern const TitleFrame TITLE_FRAME_LINE; 
 
 #endif // TITLE_FRAME_HPP
