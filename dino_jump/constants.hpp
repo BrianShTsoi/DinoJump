@@ -1,7 +1,7 @@
 #ifndef CONSTANTS_HPP
 #define CONSTANTS_HPP
 
-inline constexpr int MAX_X = 135;
+inline constexpr int MAX_X = 120;
 inline constexpr int MAX_Y = 48;
 
 inline constexpr int OBSTACLE_COOLDOWN = 50;

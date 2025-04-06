@@ -16,6 +16,8 @@
 #define DUCK_PIN D11
 #define START_PIN D12
 
+const unsigned long MAX_EXPECTED_PERIOD = 310;
+
 Game game;
 HologramFan display;
 bool jumped = false;
@@ -24,7 +26,6 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-// uint32_t value = 0;
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -42,6 +43,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 void setup() {
+  // this takes 1ms
   Wire.begin();
   Wire.setClock(800000);
 
@@ -58,6 +60,7 @@ void setup() {
   delay(5);
   digitalWrite(RESET_PIN, HIGH);
 
+  // Takes ~17ms
   display.begin();
 
   attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, RISING);
@@ -67,8 +70,8 @@ void setup() {
 
 void loop() {
   // find_period_loop();
-  test_loop();
-  // title_loop();
+  // test_loop();
+  title_loop();
   
   // game_loop();
 }
@@ -106,9 +109,6 @@ void ble_init() {
 
 void ble_iter() {
     if (deviceConnected) {
-        // pCharacteristic->setValue((uint8_t*)&value, 4);
-        // pCharacteristic->notify();
-        // value++;
         pCharacteristic->setValue(log_buf);
         pCharacteristic->notify();
         Serial.print("BLE sent: ");
@@ -166,7 +166,8 @@ void find_period_loop() {
   }
 }
 
-void test_loop() {  unsigned long prev = 0;
+void test_loop() {  
+  unsigned long prev = 0;
   unsigned long curr = millis();
   unsigned long period = 0;
   unsigned long time_passed = 0;
@@ -192,7 +193,7 @@ void test_loop() {  unsigned long prev = 0;
 
 
       // FIXME: the bug is always the fact that you initiate the flashing too late
-      if (time_passed < 310) {
+      if (time_passed < MAX_EXPECTED_PERIOD) {
         unsigned long next_flash_time = curr + time_passed / 2;
         while (millis() < next_flash_time);
         display.flash_frame(TITLE_FRAME_LINE, 1);
@@ -210,6 +211,20 @@ void test_loop() {  unsigned long prev = 0;
   }
 }
 
+void reboot_display() {
+  // this takes 1ms
+  Wire.begin();
+  Wire.setClock(800000);
+
+  pinMode(RESET_PIN, OUTPUT);
+  digitalWrite(RESET_PIN, LOW);
+  delay(5);
+  digitalWrite(RESET_PIN, HIGH);
+
+  // Takes ~17ms
+  display.begin();
+}
+
 void title_loop() {
   while(digitalRead(START_PIN) == HIGH) {
     delay(1);
@@ -220,46 +235,41 @@ void title_loop() {
   
   unsigned long prev = 0;
   unsigned long curr = millis();
-  unsigned long period = 300;
-  unsigned long next_flash_time = period / 2 + curr;
+  unsigned long period = 0;
+  unsigned long time_passed = 0;
   while (digitalRead(START_PIN) == HIGH) {
-    // If beam break is broken (LOW) Flash
-    // If half way Flash
-    // If beam break is connected ignore
     bool ir_detect = digitalRead(IR_PIN) == LOW;
-    bool bb_broken = digitalRead(BEAM_BREAK_PIN) == LOW;
+    bool bb_connected = digitalRead(BEAM_BREAK_PIN) == HIGH;
 
+    if (ir_detect && bb_connected) {
+      reboot_display();
 
-    if (ir_detect) {
-      if (bb_broken) {
-        curr = millis();
-        unsigned long ir_time_interval = curr - prev;
-        prev = curr;
+      bool first_time = prev == 0;
 
-        period = ir_time_interval;
-        next_flash_time = period / 2 + curr;
+      curr = millis();
+      time_passed = curr - prev;
+      prev = curr;
 
-        display.flash_frame(TITLE_FRAME, 1);
-
-        sprintf(log_buf, "%lu: %lu", ir_time_interval, curr);
-        ble_iter();
+      // Skip first time as time_passed is not a valid value
+      if (first_time) {
+        continue;
       }
 
-      // // FIXME: This doesn't work unless we wait for the speed to pick up and start the frame at the right time
-      // while(millis() < next_flash_time);
-      // display.flash_frame(TITLE_FRAME, 0);
+      display.flash_frame(TITLE_FRAME, 0);
+      // display.flash_frame(ALL_LIT_FRAME, 0);
+
+      if (time_passed < MAX_EXPECTED_PERIOD) {
+        unsigned long next_flash_time = curr + time_passed / 2;
+        while (millis() < next_flash_time);
+        display.flash_frame(TITLE_FRAME_LINE, 1);
+        // display.flash_frame(ALL_LIT_FRAME, 1);
+        sprintf(log_buf, "2! %lu: %lu", time_passed, curr);
+      } else {
+        sprintf(log_buf, "1! %lu: %lu", time_passed, curr);
+      }
+
+      ble_iter();
     }
-
-    // if (digitalRead(IR_PIN) == LOW) {
-    //   curr = millis();
-    //   unsigned long ir_time_interval = curr - prev;
-    //   sprintf(log_buf, "%lu: %lu", ir_time_interval, curr);
-    //   prev = curr;
-    //   ble_iter();
-
-    //   int manager_num = digitalRead(BEAM_BREAK_PIN) == HIGH ? 0 : 1;
-    //   display.flash_frame(TITLE_FRAME, manager_num);
-    // }
 
     delay(1);
 
@@ -267,25 +277,62 @@ void title_loop() {
 }
 
 void game_loop() {
+  unsigned long prev = 0;
+  unsigned long curr = 0;
+  unsigned long period = 0;
+  unsigned long time_passed = 0;
+
   while (true) {
-    if (digitalRead(IR_PIN) == LOW) {
+    bool ir_detect = digitalRead(IR_PIN) == LOW;
+    bool bb_connected = digitalRead(BEAM_BREAK_PIN) == HIGH;
+
+    if (ir_detect && bb_connected) {
       // Normally flashing a frame takes ~0.1s
-      display.flash_frame(game.get_frame(), digitalRead(BEAM_BREAK_PIN) == HIGH ? 0 : 1);
-  
-      // Updating game states take ~0.4ms
-      if (jumped) {
-        game.input(Input_State::JUMP);
-        jumped = false;
-      } else if (digitalRead(DUCK_PIN) == HIGH) {
-        game.input(Input_State::DUCK);
-      } else {
-        game.input(Input_State::NEUTRAL);
+      bool first_time = prev == 0;
+
+      curr = millis();
+      time_passed = curr - prev;
+      prev = curr;
+
+      // Skip first time as time_passed is not a valid value
+      if (first_time) {
+        continue;
       }
-      game.update_obstacles();
-      game.update_frame();
+
+      display.flash_frame(TITLE_FRAME, 0);
+  
+      game_iter();
+
+      if (time_passed < MAX_EXPECTED_PERIOD) {
+        unsigned long next_flash_time = curr + time_passed / 2;
+        while (millis() < next_flash_time);
+        display.flash_frame(TITLE_FRAME_LINE, 1);
+        sprintf(log_buf, "2! %lu: %lu", time_passed, curr);
+      } else {
+        sprintf(log_buf, "1! %lu: %lu", time_passed, curr);
+      }
+
+      game_iter();
+
+      ble_iter();
     }
     delay(1);
   }
+}
+
+void game_iter() {
+  // Updating game states take ~0.4ms
+  if (jumped) {
+    game.input(Input_State::JUMP);
+    jumped = false;
+  } else if (digitalRead(DUCK_PIN) == HIGH) {
+    game.input(Input_State::DUCK);
+  } else {
+    game.input(Input_State::NEUTRAL);
+  }
+  game.update_obstacles();
+  game.update_frame();
+  
 }
 
 void handleJump() {
