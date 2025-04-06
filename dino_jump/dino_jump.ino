@@ -16,21 +16,23 @@
 #define DUCK_PIN D11
 #define START_PIN D12
 
+// The upper limit in which we flash both PCBs
+// With motor set to 129, the actual measured period varies between 260ms and 300ms
 const unsigned long MAX_EXPECTED_PERIOD = 310;
 
 Game game;
 HologramFan display;
 bool jumped = false;
 
+// BLE enables wireless logging with several characters!
+// TODO: We could bundle all this into a class to abstract it away, but who has time for that
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
-char log_buf[4096] = {0};
+char ble_msg[1024] = {0};
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -43,7 +45,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 void setup() {
-  // this takes 1ms
+  // This takes 1ms
   Wire.begin();
   Wire.setClock(800000);
 
@@ -60,7 +62,7 @@ void setup() {
   delay(5);
   digitalWrite(RESET_PIN, HIGH);
 
-  // Takes ~17ms
+  // This takes ~17ms
   display.begin();
 
   attachInterrupt(digitalPinToInterrupt(JUMP_PIN), handleJump, RISING);
@@ -69,16 +71,11 @@ void setup() {
 }
 
 void loop() {
-  // find_period_loop();
-  // test_loop();
   title_loop();
-  
-  // game_loop();
+  game_loop();
 }
 
 void ble_init() {
-
-  // BLE BEGIN
   BLEDevice::init("ESP32");
 
   pServer = BLEDevice::createServer();
@@ -103,16 +100,14 @@ void ble_init() {
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
-  // BLE END
-  
 }
 
-void ble_iter() {
+void ble_update() {
     if (deviceConnected) {
-        pCharacteristic->setValue(log_buf);
+        pCharacteristic->setValue(ble_msg);
         pCharacteristic->notify();
         Serial.print("BLE sent: ");
-        Serial.println(log_buf);
+        Serial.println(ble_msg);
         delay(3); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
     }
     // disconnecting
@@ -131,87 +126,7 @@ void ble_iter() {
   
 }
 
-void find_period_loop() {
-  unsigned long prev = 0;
-  unsigned long curr = millis();
-  unsigned long period = 0;
-  unsigned long time_passed = 0;
-  while (true) {
-    bool ir_detect = digitalRead(IR_PIN) == LOW;
-    bool bb_broken = digitalRead(BEAM_BREAK_PIN) == LOW;
-
-
-    if (ir_detect && !bb_broken) {
-      bool first_time = prev == 0;
-
-      curr = millis();
-      time_passed = curr - prev;
-      prev = curr;
-
-      if (first_time) {
-        continue;
-      }
-      
-
-      period = time_passed * 0.8;
-      display.flash_frame(TITLE_FRAME, 0);
-
-      sprintf(log_buf, "%lu: %lu: %lu", period, time_passed, curr);
-      ble_iter();
-
-      // delay(period);
-    }
-
-    delay(1);
-  }
-}
-
-void test_loop() {  
-  unsigned long prev = 0;
-  unsigned long curr = millis();
-  unsigned long period = 0;
-  unsigned long time_passed = 0;
-
-  while (true) {
-    bool ir_detect = digitalRead(IR_PIN) == LOW;
-    bool bb_broken = digitalRead(BEAM_BREAK_PIN) == LOW;
-
-
-    if (ir_detect && !bb_broken) {
-      bool first_time = prev == 0;
-
-      curr = millis();
-      time_passed = curr - prev;
-      prev = curr;
-
-      if (first_time) {
-        continue;
-      }
-      
-
-      display.flash_frame(TITLE_FRAME, 0);
-
-
-      // FIXME: the bug is always the fact that you initiate the flashing too late
-      if (time_passed < MAX_EXPECTED_PERIOD) {
-        unsigned long next_flash_time = curr + time_passed / 2;
-        while (millis() < next_flash_time);
-        display.flash_frame(TITLE_FRAME_LINE, 1);
-        sprintf(log_buf, "both! %lu: %lu", time_passed, curr);
-      } else {
-        sprintf(log_buf, "one! %lu: %lu", time_passed, curr);
-      }
-
-      ble_iter();
-
-
-    }
-
-    delay(1);
-  }
-}
-
-void reboot_display() {
+void reset_display() {
   // this takes 1ms
   Wire.begin();
   Wire.setClock(800000);
@@ -237,12 +152,13 @@ void title_loop() {
   unsigned long curr = millis();
   unsigned long period = 0;
   unsigned long time_passed = 0;
+
   while (digitalRead(START_PIN) == HIGH) {
     bool ir_detect = digitalRead(IR_PIN) == LOW;
     bool bb_connected = digitalRead(BEAM_BREAK_PIN) == HIGH;
 
     if (ir_detect && bb_connected) {
-      reboot_display();
+      reset_display();
 
       bool first_time = prev == 0;
 
@@ -255,20 +171,18 @@ void title_loop() {
         continue;
       }
 
-      display.flash_frame(TITLE_FRAME, 0);
-      // display.flash_frame(ALL_LIT_FRAME, 0);
+      display.flash_frame(LINE_TITLE_FRAME, 0);
 
       if (time_passed < MAX_EXPECTED_PERIOD) {
         unsigned long next_flash_time = curr + time_passed / 2;
         while (millis() < next_flash_time);
-        display.flash_frame(TITLE_FRAME_LINE, 1);
-        // display.flash_frame(ALL_LIT_FRAME, 1);
-        sprintf(log_buf, "2! %lu: %lu", time_passed, curr);
+        display.flash_frame(TITLE_LINE_FRAME, 1);
+        sprintf(ble_msg, "2! %lu: %lu", time_passed, curr);
       } else {
-        sprintf(log_buf, "1! %lu: %lu", time_passed, curr);
+        sprintf(ble_msg, "1! %lu: %lu", time_passed, curr);
       }
 
-      ble_iter();
+      ble_update();
     }
 
     delay(1);
@@ -287,7 +201,8 @@ void game_loop() {
     bool bb_connected = digitalRead(BEAM_BREAK_PIN) == HIGH;
 
     if (ir_detect && bb_connected) {
-      // Normally flashing a frame takes ~0.1s
+      reset_display();
+
       bool first_time = prev == 0;
 
       curr = millis();
@@ -299,29 +214,32 @@ void game_loop() {
         continue;
       }
 
-      display.flash_frame(TITLE_FRAME, 0);
+      display.flash_frame(game.get_frame(), 0);
   
-      game_iter();
+      game_update();
 
       if (time_passed < MAX_EXPECTED_PERIOD) {
         unsigned long next_flash_time = curr + time_passed / 2;
         while (millis() < next_flash_time);
-        display.flash_frame(TITLE_FRAME_LINE, 1);
-        sprintf(log_buf, "2! %lu: %lu", time_passed, curr);
+
+        display.flash_frame(game.get_frame(), 1);
+        game_update();
+
+        sprintf(ble_msg, "2! %lu: %lu", time_passed, curr);
       } else {
-        sprintf(log_buf, "1! %lu: %lu", time_passed, curr);
+        sprintf(ble_msg, "1! %lu: %lu", time_passed, curr);
       }
 
-      game_iter();
+      ble_update();
 
-      ble_iter();
     }
+
     delay(1);
   }
 }
 
-void game_iter() {
-  // Updating game states take ~0.4ms
+// Updating game states take ~0.4ms
+void game_update() {
   if (jumped) {
     game.input(Input_State::JUMP);
     jumped = false;
