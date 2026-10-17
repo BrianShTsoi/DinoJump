@@ -95,6 +95,11 @@ void onSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
 void load_highscore() {
   preferences.begin("highscore", false);
   highscore = preferences.getUInt("counter", 0);
+  // Reset invalid values that can't be displayed or beaten
+  if (highscore > 9999) {
+    highscore = 0;
+    preferences.putUInt("counter", highscore);
+  }
   preferences.end();
 }
 
@@ -194,7 +199,7 @@ void idle() {
 void ready() {
   Serial.println("ready");
 
-  if (incoming.score > highscore) {
+  if (incoming.score > (int)highscore) {
     update_highscore(incoming.score);
     displayNumber(highscore_hex, highscore);
   }
