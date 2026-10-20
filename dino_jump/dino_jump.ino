@@ -22,9 +22,12 @@ enum State {
 const unsigned long MAX_EXPECTED_PERIOD = 350;
 const unsigned long DEATH_SCREEN_PERIOD = 3500;
 
+// Must match input_message in input.ino
 typedef struct {
   bool jump_timeout;
   bool duck_advance;
+  bool start;     // START pressed: start a game, or restart from the death screen
+  bool power_off; // SPIN pressed while on: turn the fan and display off
 } input_message;
 
 typedef struct {
@@ -52,6 +55,8 @@ void onReceive(const uint8_t *mac, const uint8_t *data, int len) {
   // Latch: only set to true, never clear — let consumers clear after reading
   if (msg.jump_timeout) incoming.jump_timeout = true;
   if (msg.duck_advance) incoming.duck_advance = true;
+  if (msg.start) incoming.start = true;
+  if (msg.power_off) incoming.power_off = true;
 
   // digitalWrite(LED_BUILTIN, HIGH);
   // Serial.print("[onReceive] ");
@@ -113,8 +118,14 @@ void setup() {
   esp_now_register_recv_cb(onReceive);
   esp_now_register_send_cb(onSend);
 
+  clear_incoming();
+}
+
+void clear_incoming() {
   incoming.jump_timeout = false;
   incoming.duck_advance = false;
+  incoming.start = false;
+  incoming.power_off = false;
 }
 
 void loop() {
@@ -143,7 +154,7 @@ void idle_loop() {
   while (!incoming.duck_advance) {
     Serial.println("not advancing, still idle");
   }
-  incoming.duck_advance = false;
+  clear_incoming();
 
   delay(5);
 
@@ -153,12 +164,10 @@ void idle_loop() {
 void title_loop() {
   beam_break_rising = false;
 
-  bool timedout = false;
-
   unsigned long prev = 0;
   unsigned long curr = millis();
   unsigned long time_passed = 0;
-  while (!incoming.duck_advance && !incoming.jump_timeout) {
+  while (!incoming.duck_advance && !incoming.jump_timeout && !incoming.power_off) {
     if (beam_break_rising) {
       bool first_time = prev == 0;
       curr = millis();
@@ -181,21 +190,12 @@ void title_loop() {
     }
 
     delay(1);
-
-    if (incoming.jump_timeout) {
-      timedout = true;
-    }
   }
 
-  if (timedout) {
-    incoming.jump_timeout = false;
-    incoming.duck_advance = false;
-    currentState = IDLE;
-  } else {
-    incoming.jump_timeout = false;
-    incoming.duck_advance = false;
-    currentState = GAME;
-  }
+  // Ready timeout or SPIN both turn the machine off
+  bool turn_off = incoming.jump_timeout || incoming.power_off;
+  clear_incoming();
+  currentState = turn_off ? IDLE : GAME;
 
   delay(5);
 }
@@ -204,12 +204,14 @@ void game_loop() {
   beam_break_rising = false;
 
   Game curr_game;
+  // Drop presses left over from the START that began this game
+  clear_incoming();
 
   unsigned long prev = 0;
   unsigned long curr = millis();
   unsigned long time_passed = 0;
   int prev_score = -1;
-  while (!curr_game.get_collision()) {
+  while (!curr_game.get_collision() && !incoming.power_off) {
     int curr_score = curr_game.get_score();
     if (curr_score != prev_score) {
       outgoing.score = curr_score;
@@ -268,7 +270,20 @@ void game_loop() {
     delay(1);
   }
 
+  if (incoming.power_off) {
+    clear_incoming();
+    currentState = IDLE;
+    return;
+  }
+
   Serial.println("Collision occured");
+
+  // Tell the input board right away, so START can restart during the death screen.
+  // Use the final score: a point scored on the colliding tick hasn't been sent yet.
+  outgoing.score = curr_game.get_score();
+  outgoing.death = true;
+  esp_now_send(inputMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+
   game = curr_game;
   currentState = DEATH;
 }
@@ -279,8 +294,12 @@ void death_loop() {
   unsigned long prev = 0;
   unsigned long curr = millis();
   unsigned long time_passed = 0;
+  // Drop JUMP/DUCK button states sent before the input board saw the death
+  clear_incoming();
+
   unsigned long death_screen_start = millis();
-  while (millis() - death_screen_start < DEATH_SCREEN_PERIOD) {
+  while (millis() - death_screen_start < DEATH_SCREEN_PERIOD && !incoming.start &&
+         !incoming.power_off) {
     if (beam_break_rising) {
       bool first_time = prev == 0;
       curr = millis();
@@ -304,14 +323,14 @@ void death_loop() {
     }
   }
 
-  // Communicate game over to Base
-  outgoing.death = true;
-  esp_now_send(inputMAC, (uint8_t *)&outgoing, sizeof(outgoing));
-
-  incoming.duck_advance = false;
-  incoming.jump_timeout = false;
-
-  currentState = TITLE;
+  if (incoming.power_off) {
+    currentState = IDLE;
+  } else if (incoming.start) {
+    currentState = GAME;
+  } else {
+    currentState = TITLE;
+  }
+  clear_incoming();
 }
 
 void handle_state_input() {

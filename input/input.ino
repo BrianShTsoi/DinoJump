@@ -27,15 +27,19 @@ const int SAMPLE_SIZE = 10;
 #define LED_BUILTIN 13
 
 const unsigned long TIMEOUT_LIMIT = 60000;
+const unsigned long DEBOUNCE_MS = 50;
 
 enum GlobalState { IDLE, READY, RUNNING };
 
 GlobalState global_state = IDLE;
 bool prev_foot_detected = false;
 
+// Must match input_message in dino_jump.ino
 typedef struct {
   bool jump_timeout;
   bool duck_advance;
+  bool start;     // START pressed: start a game, or restart from the death screen
+  bool power_off; // SPIN pressed while on: turn the fan and display off
 } input_message;
 
 typedef struct {
@@ -156,6 +160,8 @@ void setup() {
 
   outgoing.duck_advance = false;
   outgoing.jump_timeout = false;
+  outgoing.start = false;
+  outgoing.power_off = false;
 }
 
 void loop() {
@@ -179,17 +185,47 @@ void loop() {
   delay(1);
 }
 
+void send_input(bool jump_timeout, bool duck_advance, bool start, bool power_off) {
+  outgoing.jump_timeout = jump_timeout;
+  outgoing.duck_advance = duck_advance;
+  outgoing.start = start;
+  outgoing.power_off = power_off;
+  esp_now_send(gameMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+}
+
+// True once per press of SPIN (debounced press edge), so holding the button
+// after turning the machine off doesn't turn it straight back on
+bool spin_pressed() {
+  static bool was_down = false;
+  static unsigned long last_change = 0;
+
+  bool down = digitalRead(SPIN_BUTTON_PIN) == LOW;
+  if (down != was_down && millis() - last_change > DEBOUNCE_MS) {
+    was_down = down;
+    last_change = millis();
+    return down;
+  }
+  return false;
+}
+
+void power_off() {
+  digitalWrite(MOTOR_OUTPUT_PIN, LOW);
+  send_input(false, false, false, true);
+  displayNumber(score_hex, 0);
+  global_state = IDLE;
+}
+
 void idle() {
   Serial.println("idle");
   digitalWrite(MOTOR_OUTPUT_PIN, LOW);
 
-  while (digitalRead(SPIN_BUTTON_PIN) != LOW);
-  
+  while (!spin_pressed()) {
+    delay(1);
+  }
+
   digitalWrite(MOTOR_OUTPUT_PIN, HIGH);
 
-  outgoing.jump_timeout = false;
-  outgoing.duck_advance = true;
-  esp_now_send(gameMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+  send_input(false, true, false, false);
 
   delay(1000);
 
@@ -209,22 +245,24 @@ void ready() {
   bool start = false;
   bool timeout = (millis() - first_ready_time) > TIMEOUT_LIMIT;
   while (!timeout && !start) {
+    if (spin_pressed()) {
+      power_off();
+      return;
+    }
     timeout = (millis() - first_ready_time) > TIMEOUT_LIMIT;
     start = digitalRead(START_BUTTON_PIN) == LOW;
   }
 
   if (start) {
-    outgoing.duck_advance = true;
-    esp_now_send(gameMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+    // duck_advance moves the title screen on; start also restarts from the death screen
+    send_input(false, true, true, false);
 
     global_state = RUNNING;
     incoming.score = 0;
   } else if (timeout) {
     digitalWrite(MOTOR_OUTPUT_PIN, LOW);
 
-    outgoing.jump_timeout = true;
-    outgoing.duck_advance = false;
-    esp_now_send(gameMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+    send_input(true, false, false, false);
 
     global_state = IDLE;
   }
@@ -237,6 +275,10 @@ void running() {
   Serial.println("running");
 
   while (global_state == RUNNING) {
+    if (spin_pressed()) {
+      power_off();
+      return;
+    }
     detect_button_input();
     delay(20);
   }
@@ -253,7 +295,5 @@ void detect_button_input(){
   bool duck = digitalRead(DUCK_BUTTON_INPUT_PIN) == LOW;
   bool jump = digitalRead(JUMP_BUTTON_INPUT_PIN) == LOW;
 
-  outgoing.duck_advance = duck;
-  outgoing.jump_timeout = jump;
-  esp_now_send(gameMAC, (uint8_t *)&outgoing, sizeof(outgoing));
+  send_input(jump, duck, false, false);
 }
