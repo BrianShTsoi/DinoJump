@@ -20,7 +20,7 @@ enum State {
 };
 
 const unsigned long MAX_EXPECTED_PERIOD = 350;
-const unsigned long DEATH_SCREEN_PERIOD = 5000;
+const unsigned long DEATH_SCREEN_PERIOD = 3500;
 
 typedef struct {
   bool jump_timeout;

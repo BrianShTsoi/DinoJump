@@ -34,6 +34,8 @@ class Game {
 	void draw_large_cactus_with_collision(std::array<int, 2> location);
 	void draw_bird_with_collision(std::array<int, 2> location);
   void draw_ground();
+	void draw_text(const char *text, int top_row);
+	void draw_game_over();
 	int score;
 	int cooldown_count;
 	bool collision;

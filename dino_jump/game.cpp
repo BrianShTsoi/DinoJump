@@ -4,6 +4,41 @@
 #include "dino.hpp"
 #include "sprites.hpp"
 
+#include <cstring>
+
+namespace {
+// 5x7 bitmap font, row 0 = top. Low 5 bits of each byte; bit 4 = leftmost col.
+// Only glyphs used by the death screen ("GAME OVER") are defined.
+constexpr int FONT_W = 5;
+constexpr int FONT_H = 7;
+constexpr int FONT_SPACING = 1;
+
+struct Glyph {
+  char c;
+  uint8_t rows[FONT_H];
+};
+
+const Glyph FONT[] = {
+  {' ', {0, 0, 0, 0, 0, 0, 0}},
+  {'G', {0b01111, 0b10000, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111}},
+  {'A', {0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001}},
+  {'M', {0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001}},
+  {'E', {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111}},
+  {'O', {0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110}},
+  {'V', {0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100}},
+  {'R', {0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001}},
+};
+
+const uint8_t *glyph_for(char c) {
+  for (const Glyph &g : FONT) {
+    if (g.c == c) {
+      return g.rows;
+    }
+  }
+  return FONT[0].rows; // fall back to blank glyph
+}
+} // namespace
+
 Game::Game()
   : score(0), cooldown_count(0), collision(false), ground_pattern(GROUND_PATTERN_ARRAY), frame(), dino(Dino()),
     obs_manager(Obstacle_Manager()) {
@@ -78,7 +113,12 @@ void Game::draw_dino_death() {
   int y_position = dino.get_y_position();
   for (int i = 0; i < DEAD_EYE_DIAMETER; ++i) {
     for (int j = 0; j < DEAD_EYE_DIAMETER; ++j) {
-      frame.set(DINO_DRAW_Y + +dead_eye_y + j - y_position, DEAD_EYE_X + i, sprite.get(j, i));
+      int row = DINO_DRAW_Y + dead_eye_y + j - y_position;
+      // Guard: dino may die mid-jump with the eye above the frame top
+      if (row < 0 || row >= MAX_Y) {
+        continue;
+      }
+      frame.set(row, DEAD_EYE_X + i, sprite.get(j, i));
     }
   }
 }
@@ -151,6 +191,38 @@ void Game::draw_ground() {
   ground_pattern.rotate();
 }
 
+void Game::draw_text(const char *text, int top_row) {
+  int len = static_cast<int>(std::strlen(text));
+  int total_w = len * (FONT_W + FONT_SPACING) - FONT_SPACING;
+  int x = 24;
+  // int x = (MAX_X - total_w) / 2; // horizontally centered
+  // if (x < 0) {
+  //   x = 0;
+  // }
+
+  for (int i = 0; i < len; ++i) {
+    const uint8_t *rows = glyph_for(text[i]);
+    for (int r = 0; r < FONT_H; ++r) {
+      for (int col = 0; col < FONT_W; ++col) {
+        // Overlay only: set lit pixels, leave background untouched
+        if ((rows[r] >> (FONT_W - 1 - col)) & 1) {
+          int px = x + col;
+          int py = top_row + r;
+          if (px >= 0 && px < MAX_X && py >= 0 && py < MAX_Y) {
+            frame.set(py, px, 1);
+          }
+        }
+      }
+    }
+    x += FONT_W + FONT_SPACING;
+  }
+}
+
+void Game::draw_game_over() {
+  // Centered in the open "sky" band (rows 0-20); dino occupies rows 21-40
+  draw_text("GAME OVER", (21 - FONT_H) / 2);
+}
+
 void Game::update_frame() {
   frame.clear();
 
@@ -175,6 +247,7 @@ void Game::update_frame() {
   if (collision) {
     dino.die();
     draw_dino_death();
+    draw_game_over();
   }
 }
 
