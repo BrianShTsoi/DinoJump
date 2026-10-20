@@ -1,6 +1,7 @@
 #include "game.hpp"
 #include "bit_array_2d.hpp"
 #include "constants.hpp"
+#include "difficulty.hpp"
 #include "dino.hpp"
 #include "sprites.hpp"
 
@@ -62,19 +63,22 @@ void Game::input(Input_State input) {
     default:
       input_state = Dino_State::RUNNING;
   }
+  this->dino.set_jump_ticks(difficulty_for_score(this->score).jump_ticks);
   this->dino.try_set_input_state(input_state);
 }
 
 void Game::update_obstacles() {
+  const Difficulty &difficulty = difficulty_for_score(this->score);
+
   // Shift obstacles
-  if (this->obs_manager.shift_obstacles()) {
+  if (this->obs_manager.shift_obstacles(difficulty.obstacle_speed)) {
     this->score++;
   }
 
   // Handle obstacle generation
   if (cooldown_count == 0) {
     this->obs_manager.generate_obstacle();
-    cooldown_count = OBSTACLE_COOLDOWN;
+    cooldown_count = difficulty.obstacle_cooldown;
   } else {
     cooldown_count--;
   }

@@ -29,8 +29,8 @@ Obstacle_Type Obstacle::get_type() { return this->type; }
 
 std::array<int, 2> Obstacle::get_location() { return {this->x_position, this->y_position}; }
 
-bool Obstacle::shift_location() {
-	this->x_position -= 5;
+bool Obstacle::shift_location(int speed) {
+	this->x_position -= speed;
 	int width = 0;
 	switch (this->type) {
 		case SMALL_CACTUS:
@@ -60,12 +60,12 @@ void Obstacle_Manager::generate_obstacle() {
 	this->obstacles.push_back(Obstacle(static_cast<Obstacle_Type>(random_value)));
 }
 
-bool Obstacle_Manager::shift_obstacles() {
+bool Obstacle_Manager::shift_obstacles(int speed) {
 	bool obstacle_passed = false;
 	for (std::vector<Obstacle>::iterator obs_itr = this->obstacles.begin();
 		 obs_itr != this->obstacles.end();) {
 		// Check if obstacle shifted out of playing field
-		bool valid = obs_itr->shift_location();
+		bool valid = obs_itr->shift_location(speed);
 		if (!valid) {
 			obs_itr = this->obstacles.erase(obs_itr);
 			obstacle_passed = true;

@@ -15,7 +15,7 @@ class Obstacle {
 	Obstacle(Obstacle_Type type);
 	Obstacle_Type get_type();
 	std::array<int, 2> get_location();
-	bool shift_location();
+	bool shift_location(int speed);
 
   private:
 	int x_position;
@@ -28,7 +28,7 @@ class Obstacle_Manager {
 	Obstacle_Manager();
 	std::vector<Obstacle> fetch_obstacles();
 	void generate_obstacle();
-	bool shift_obstacles();
+	bool shift_obstacles(int speed);
 
   private:
 	std::vector<Obstacle> obstacles;

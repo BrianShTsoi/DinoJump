@@ -3,9 +3,9 @@
 
 #include "constants.hpp"
 
-inline constexpr int PARABOLIC_MOTION = -20;
-inline constexpr int INIT_JUMP_VELOCITY = 12;
-inline constexpr int JUMP_DURATION = 8;
+// Jump height in pixels above the ground; 21 puts the top of the dino on the
+// top LED row, any higher and it is drawn off the display
+inline constexpr int JUMP_PEAK = 21;
 
 inline constexpr int DINO_X = 3;
 inline constexpr int DEAD_EYE_X = 18;
@@ -22,6 +22,7 @@ class Dino {
 	Step_State get_step();
 	int get_y_position();
 	void try_set_input_state(Dino_State input_state);
+	void set_jump_ticks(int ticks);
 	void die();
 
   private:
@@ -32,7 +33,7 @@ class Dino {
 	Dino_State state;
 	Step_State step;
 	int y_position;
-	int jump_velocity;
+	int jump_ticks;
 	int jump_time;
 };
 

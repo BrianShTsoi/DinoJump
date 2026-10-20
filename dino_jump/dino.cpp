@@ -1,8 +1,16 @@
 #include "dino.hpp"
+#include "difficulty.hpp"
 
 Dino::Dino()
 	: state(Dino_State::RUNNING), step(Step_State::LEFT), y_position(GROUND_HEIGHT),
-	  jump_velocity(INIT_JUMP_VELOCITY), jump_time(0) {}
+	  jump_ticks(LEVELS[0].jump_ticks), jump_time(0) {}
+
+void Dino::set_jump_ticks(int ticks) {
+	// Changing the airtime mid-air would warp the arc, so only take it on the ground
+	if (this->state != Dino_State::JUMPING) {
+		this->jump_ticks = ticks;
+	}
+}
 
 Dino_State Dino::get_state() { return this->state; }
 
@@ -44,18 +52,18 @@ void Dino::duck() {
 
 void Dino::jump() {
 	this->state = Dino_State::JUMPING;
-
-	int curve = (PARABOLIC_MOTION * jump_time * (jump_time - JUMP_DURATION)) /
-				(JUMP_DURATION * JUMP_DURATION);
-	this->y_position = INIT_JUMP_VELOCITY + curve + GROUND_HEIGHT;
 	this->jump_time++;
 
-	if (this->y_position <= GROUND_HEIGHT) {
+	if (this->jump_time >= this->jump_ticks) {
 		this->y_position = GROUND_HEIGHT;
-		this->jump_velocity = INIT_JUMP_VELOCITY;
 		this->jump_time = 0;
 		this->state = Dino_State::RUNNING;
+		return;
 	}
+
+	// Symmetric parabola: 0 at t = 0 and t = jump_ticks, JUMP_PEAK in the middle
+	this->y_position = GROUND_HEIGHT + (4 * JUMP_PEAK * jump_time * (jump_ticks - jump_time)) /
+										   (jump_ticks * jump_ticks);
 }
 
 void Dino::die() {
