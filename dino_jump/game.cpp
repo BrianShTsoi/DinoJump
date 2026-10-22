@@ -197,12 +197,8 @@ void Game::draw_ground() {
 
 void Game::draw_text(const char *text, int top_row) {
   int len = static_cast<int>(std::strlen(text));
-  int total_w = len * (FONT_W + FONT_SPACING) - FONT_SPACING;
-  int x = 24;
-  // int x = (MAX_X - total_w) / 2; // horizontally centered
-  // if (x < 0) {
-  //   x = 0;
-  // }
+  // Centered for "GAME OVER": (MAX_X - 53) / 2
+  int x = 33;
 
   for (int i = 0; i < len; ++i) {
     const uint8_t *rows = glyph_for(text[i]);

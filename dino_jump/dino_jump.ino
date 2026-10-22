@@ -178,12 +178,12 @@ void title_loop() {
       if (first_time) {
         continue;
       }
-      display.flash_frame(LINE_TITLE_FRAME, 1);
+      display.flash_frame(TITLE_FRAME, 1);
 
       if (time_passed < MAX_EXPECTED_PERIOD) {
         unsigned long next_flash_time = curr + time_passed / 2;
         while (millis() < next_flash_time);
-        display.flash_frame(TITLE_LINE_FRAME, 0);
+        display.flash_frame(TITLE_FRAME, 0);
       }
 
       beam_break_rising = false;

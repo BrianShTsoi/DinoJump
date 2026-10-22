@@ -23,6 +23,8 @@ Difficulty levels (setting `levels`, on by default, mirrors difficulty.hpp)
   difficulty.hpp (override with --level-table). A new airtime only applies while
   the dino is on the ground. With levels off, the manual values are used.
 
+Emulator-only setting `dino_x` moves the dino (defaults to DINO_X in dino.hpp).
+
 Sprites and default constants are parsed directly from the firmware sources so
 the emulator stays in sync with them.
 
@@ -185,6 +187,8 @@ class Config:
     weight_large_cactus: int = 1
     weight_low_bird: int = 1
     weight_high_bird: int = 1
+    # dino.hpp DINO_X, the dino's left column
+    dino_x: int = 13
     # Difficulty levels, see LEVEL_TABLE
     levels: int = 1
     points_per_level: int = 5
@@ -224,6 +228,7 @@ class Config:
             points_per_level=constants.get("POINTS_PER_LEVEL", 5),
             level_table=level_table,
             death_screen_ms=constants.get("DEATH_SCREEN_PERIOD", 5000),
+            dino_x=constants.get("DINO_X", 13),
         )
 
     @property
@@ -351,6 +356,7 @@ TUNABLES = [
     ("weight_low_bird", "weight low bird", 1, 0, 10),
     ("weight_high_bird", "weight high bird", 1, 0, 10),
     ("levels", "difficulty levels", 1, 0, 1),
+    ("dino_x", "dino x", 1, 0, 60),
     ("points_per_level", "points per level", 1, 1, 100),
     ("start_level", "start level", 1, 0, 99),
 ]
@@ -406,10 +412,8 @@ class Firmware:
         self.dino_right_duck = sprite("DINO_RIGHT_DUCK_SPRITE", self.c["DINO_WIDTH"])
         self.dead_eye = sprite("DEAD_EYE_SPRITE", self.c["DEAD_EYE_DIAMETER"])
         self.ground_pattern = sprite("GROUND_PATTERN_SPRITE", max_x)
-        # The two strips show these alternately; persistence of vision merges them
-        self.title = sprite("TITLE_LINE_SPRITE", max_x, title).union(
-            sprite("LINE_TITLE_SPRITE", max_x, title)
-        )
+        # Both strips flash this on the title screen
+        self.title = sprite("TITLE_SPRITE", max_x, title)
 
 
 class Dino:
@@ -575,7 +579,7 @@ class Game:
         for i in range(c["DINO_WIDTH"]):
             for j in range(c["DINO_HEIGHT"]):
                 frame.set(
-                    dino_draw_y + j - self.dino.y_position, i + c["DINO_X"], sprite.get(j, i)
+                    dino_draw_y + j - self.dino.y_position, i + self.cfg.dino_x, sprite.get(j, i)
                 )
 
         for obs in self.obstacles:
@@ -603,7 +607,9 @@ class Game:
                     row = dino_draw_y + eye_y + j - self.dino.y_position
                     # Guard: dino may die mid-jump with the eye above the frame top
                     if 0 <= row < c["MAX_Y"]:
-                        frame.set(row, c["DEAD_EYE_X"] + i, fw.dead_eye.get(j, i))
+                        # The eye keeps its offset from the dino's left edge
+                        eye_x = c["DEAD_EYE_X"] - c["DINO_X"] + self.cfg.dino_x
+                        frame.set(row, eye_x + i, fw.dead_eye.get(j, i))
             if self.collision and fw.game_over:
                 self.draw_game_over()
 
@@ -875,7 +881,7 @@ class Emulator:
         peak = max(profile, default=c["GROUND_HEIGHT"])
         gap_ticks = cfg.obstacle_cooldown + 1
         tick_s = cfg.tick_ms / 1000
-        travel_ticks = (c["MAX_X"] - 1 - (c["DINO_X"] + c["DINO_WIDTH"])) / cfg.obstacle_speed
+        travel_ticks = (c["MAX_X"] - 1 - (cfg.dino_x + c["DINO_WIDTH"])) / cfg.obstacle_speed
         stats = [
             f"{1 / tick_s:.1f} ticks/s; jump {airtime} ticks ({airtime * tick_s:.2f}s), "
             f"covers {airtime * cfg.obstacle_speed}px, peak y={peak}",

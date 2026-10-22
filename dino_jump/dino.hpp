@@ -7,8 +7,8 @@
 // top LED row, any higher and it is drawn off the display
 inline constexpr int JUMP_PEAK = 21;
 
-inline constexpr int DINO_X = 3;
-inline constexpr int DEAD_EYE_X = 18;
+inline constexpr int DINO_X = 13;
+inline constexpr int DEAD_EYE_X = 28;
 inline constexpr int DEAD_EYE_Y = 1;
 inline constexpr int DEAD_DUCK_EYE_Y = 10;
 
